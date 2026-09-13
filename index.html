@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha 2.5D - Criciúma 1960s Caverna e Carvão</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050403;
+            font-family: 'Courier New', Courier, monospace;
+            color: #e0d0c0;
+        }
+
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            background-color: #080605;
+            image-rendering: pixelated; 
+        }
+
+        /* HUD Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 10;
+        }
+
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .stats-box {
+            background: rgba(18, 14, 11, 0.88);
+            padding: 14px;
+            border: 2px solid #5a4332;
+            border-radius: 6px;
+            width: 290px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+        }
+
+        .stat-label { 
+            margin-bottom: 4px; 
+            font-size: 13px; 
+            font-weight: bold; 
+            letter-spacing: 0.5px;
+            color: #d1b89d;
+        }
+        
+        .bar-bg {
+            width: 100%; height: 14px;
+            background: #1a130e;
+            border: 1px solid #4a382a;
+            margin-bottom: 12px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            transition: width 0.1s linear, background-color 0.3s;
+        }
+
+        #fuel-fill { background-color: #e08b28; width: 100%; }
+        #sanity-fill { background-color: #8b4ec7; width: 100%; }
+
+        .inventory-item { 
+            font-size: 13px; 
+            font-weight: bold;
+            color: #f3d874;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 4px;
+        }
+
+        .controls-box {
+            background: rgba(18, 14, 11, 0.88);
+            padding: 14px;
+            border: 2px solid #5a4332;
+            border-radius: 6px;
+            align-self: flex-start;
+            font-size: 12px;
+            line-height: 1.7;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+        }
+        
+        .alpha-tag {
+            color: #ff5533;
+            font-weight: bold;
+        }
+
+        /* Mensagem interativa e Tela de Vitória */
+        #interaction-msg {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 15, 10, 0.95);
+            border: 2px solid #f3d874;
+            color: #fff;
+            padding: 10px 20px;
+            font-weight: bold;
+            font-size: 14px;
+            border-radius: 6px;
+            display: none;
+            box-shadow: 0 0 15px rgba(243, 216, 116, 0.4);
+        }
+
+        #victory-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(5, 4, 3, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #victory-screen h1 {
+            color: #f0c080;
+            font-size: 36px;
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+        }
+
+        #victory-screen p {
+            color: #d1b89d;
+            font-size: 16px;
+            max-width: 500px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        #victory-screen button {
+            background: #5a4332;
+            color: #fff;
+            border: 2px solid #f0c080;
+            padding: 12px 28px;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        #victory-screen button:hover {
+            background: #7a5a43;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div class="stats-box">
+                <div class="stat-label">COMBUSTÍVEL DA LAMPARINA</div>
+                <div class="bar-bg"><div id="fuel-fill" class="bar-fill"></div></div>
+                
+                <div class="stat-label">SANIDADE MENTAL</div>
+                <div class="bar-bg"><div id="sanity-fill" class="bar-fill"></div></div>
+                
+                <div class="inventory-item">
+                    <span>🛢️ Parafinas:</span> 
+                    <span id="paraffin-count" style="font-size: 15px;">0</span>
+                </div>
+                <div class="inventory-item">
+                    <span>🔨 Martelo:</span> 
+                    <span id="hammer-count" style="color: #ff5533;">NÃO POSSUI</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="interaction-msg">Pressione [ E ] para quebrar a madeira com o Martelo!</div>
+
+        <div class="controls-box">
+            <strong style="color: #f0c080; font-size: 13px;">[ CONTROLES DA DEMO ]</strong><br>
+            <strong>W A S D / Setas</strong>: Mover o mineiro<br>
+            <strong>C</strong>: Alternar Agachar / Levantar<br>
+            <strong>E / Espaço</strong>: Interagir com a Passagem<br>
+            <strong>R</strong>: Recarregar Lamparina (Gasta 1 Parafina)<br>
+            <span class="alpha-tag"><strong>H</strong>: Curar Sanidade (+20%)</span><br>
+            <span class="alpha-tag"><strong>G</strong>: Teste (+1 Parafina)</span><br>
+            <span class="alpha-tag"><strong>T</strong>: Teste (-20% Combustível)</span><br>
+            <span class="alpha-tag"><strong>Y</strong>: Teste (-20% Sanidade)</span>
+        </div>
+    </div>
+
+    <!-- Tela de Vitória -->
+    <div id="victory-screen">
+        <h1>DEMO CONCLUÍDA!</h1>
+        <button onclick="location.reload()">JOGAR NOVAMENTE</button>
+    </div>
+
+    <script>
+        const PALETTE = {
+            room1Floor: '#3a291e', room1Grid: '#2e2017',
+            room2Floor: '#2b1f17', room2Grid: '#211711',
+            wallTop: '#5c4333', wallFront: '#302117',
+            holeInner: '#0d0805', holeRim: '#7a5a43',
+            playerHead: '#6c8299', playerBody: '#455668', playerShadow: 'rgba(0, 0, 0, 0.45)',
+            paraffin: '#fcdc53',
+            woodBar: '#8b5a2b', woodDark: '#4a2e13'
+        };
+
+        class InputManager {
+            constructor() {
+                this.keys = {}; this.justPressed = {};
+                window.addEventListener('keydown', (e) => {
+                    const k = e.key.toLowerCase();
+                    if (!this.keys[k]) this.justPressed[k] = true;
+                    this.keys[k] = true;
+                });
+                window.addEventListener('keyup', (e) => this.keys[e.key.toLowerCase()] = false);
+            }
+            isDown(k) { return !!this.keys[k]; }
+            isJustPressed(k) {
+                if (this.justPressed[k]) { this.justPressed[k] = false; return true; }
+                return false;
+            }
+            clear() { this.justPressed = {}; }
+        }
+
+        class Player {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.radius = 16;
+                this.height2D = 30;
+                this.speed = 130; 
+                this.crouchSpeed = 55;
+                this.angle = Math.PI; 
+                this.isCrouching = false;
+                this.fuel = 100; this.sanity = 100; this.paraffins = 0;
+                this.hasHammer = false;
+                this.currentZone = 1; 
+            }
+
+            update(dt, input, mapManager) {
+                this.fuel = Math.max(0, this.fuel - 1.2 * dt);
+                if (this.fuel < 30) this.sanity = Math.max(0, this.sanity - 2.5 * dt);
+
+                if (input.isJustPressed('t')) this.fuel = Math.max(0, this.fuel - 20);
+                if (input.isJustPressed('y')) this.sanity = Math.max(0, this.sanity - 20);
+                if (input.isJustPressed('h')) this.sanity = Math.min(100, this.sanity + 20);
+                if (input.isJustPressed('g')) this.paraffins++;
+
+                if (input.isJustPressed('r') && this.paraffins > 0 && this.fuel < 100) {
+                    this.paraffins--; this.fuel = 100; this.sanity = Math.min(100, this.sanity + 20);
+                }
+
+                if (input.isJustPressed('c')) {
+                    if (!this.isCrouching) this.isCrouching = true;
+                    else if (this.currentZone !== 0) this.isCrouching = false;
+                }
+                if (this.currentZone === 0) this.isCrouching = true;
+
+                const targetHeight = this.isCrouching ? 14 : 30;
+                this.height2D += (targetHeight - this.height2D) * 0.2;
+
+                let dx = 0; let dy = 0;
+                if (input.isDown('w') || input.isDown('arrowup')) dy -= 1;
+                if (input.isDown('s') || input.isDown('arrowdown')) dy += 1;
+                if (input.isDown('a') || input.isDown('arrowleft')) dx -= 1;
+                if (input.isDown('d') || input.isDown('arrowright')) dx += 1;
+
+                if (dx !== 0 || dy !== 0) {
+                    const len = Math.hypot(dx, dy);
+                    dx /= len; dy /= len;
+                    this.angle = Math.atan2(dy, dx);
+                }
+
+                const spd = this.isCrouching ? this.crouchSpeed : this.speed;
+                this.moveWithCollisions(dx * spd * dt, dy * spd * dt, mapManager);
+            }
+
+            moveWithCollisions(mx, my, map) {
+                if (map.isValidPosition(this.x + mx, this.y, this.radius, this.isCrouching)) this.x += mx;
+                if (map.isValidPosition(this.x, this.y + my, this.radius, this.isCrouching)) this.y += my;
+                this.currentZone = map.getZone(this.x, this.y, this.radius);
+            }
+        }
+
+        class MapManager {
+            constructor() {
+                this.wallHeight = 35;
+                this.worldWidth = 1400; 
+                this.worldHeight = 700;
+                
+                // Parede da Direita (com a passagem)
+                this.rightWall = {
+                    x: 1310,
+                    w: 60,
+                    holeY: 290,
+                    holeH: 120
+                };
+
+                // Objeto da madeira que bloqueia o vão dessa parede
+                this.blockade = {
+                    x: 1310,
+                    y: 290,
+                    w: 60,
+                    h: 120,
+                    active: true
+                };
+            }
+
+            isValidPosition(px, py, r, isCrouching) {
+                const left = px - r, right = px + r, top = py - r, bottom = py + r;
+
+                if (left < 0 || right > this.worldWidth) return false;
+                if (top < 0 || bottom > this.worldHeight) return false;
+
+                // 1. Parede Central (Com furo de agachar)
+                const wallX = this.worldWidth / 2 - 30;
+                const wallW = 60;
+                const holeY = this.worldHeight / 2 - 45;
+                const holeH = 90;
+
+                if (right > wallX && left < wallX + wallW) {
+                    const withinHoleY = (top >= holeY) && (bottom <= holeY + holeH);
+                    if (!withinHoleY || !isCrouching) return false; 
+                }
+
+                // 2. Parede da Direita (Com passagem bloqueada por madeira)
+                const rw = this.rightWall;
+                if (right > rw.x && left < rw.x + rw.w) {
+                    const withinPassageY = (top >= rw.holeY) && (bottom <= rw.holeY + rw.holeH);
+                    // Se estiver fora do vão da passagem OU se a madeira ainda estiver ativa, colide
+                    if (!withinPassageY || this.blockade.active) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            getZone(px, py, r) {
+                const wallX = this.worldWidth / 2 - 30;
+                const wallW = 60;
+                if (px + r < wallX) return 2;
+                if (px - r > wallX + wallW) return 1;
+                return 0; 
+            }
+        }
+
+        class GameEngine {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d', { alpha: false });
+                
+                this.lightCanvas = document.createElement('canvas');
+                this.lightCtx = this.lightCanvas.getContext('2d');
+
+                this.input = new InputManager();
+                this.map = new MapManager();
+                
+                this.internalHeight = 450; 
+                this.internalWidth = 0;
+
+                this.camera = { x: 0, y: 0 };
+                this.isFinished = false;
+
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+
+                // Jogador inicia no lado direito (Sala 1)
+                const startX = 1220;
+                const startY = 330;
+                this.player = new Player(startX, startY);
+
+                // Itens no mapa: Parafina e Martelo na Sala 2 (Lado Esquerdo)
+                this.items = [
+                    { id: 1, type: 'paraffin', x: (this.map.worldWidth / 2) - 200, y: this.map.worldHeight / 2 - 80, radius: 12, active: true },
+                    { id: 2, type: 'hammer', x: 180, y: this.map.worldHeight / 2 + 50, radius: 14, active: true }
+                ];
+
+                this.lastTime = performance.now();
+                requestAnimationFrame((t) => this.loop(t));
+            }
+
+            resize() {
+                const ratio = window.innerWidth / window.innerHeight;
+                this.internalWidth = this.internalHeight * ratio;
+
+                this.canvas.width = this.internalWidth;
+                this.canvas.height = this.internalHeight;
+                this.lightCanvas.width = this.internalWidth;
+                this.lightCanvas.height = this.internalHeight;
+            }
+
+            loop(now) {
+                if (this.isFinished) return;
+
+                const dt = Math.min((now - this.lastTime) / 1000, 0.1);
+                this.lastTime = now;
+
+                this.update(dt);
+                this.draw();
+
+                this.input.clear();
+                requestAnimationFrame((t) => this.loop(t));
+            }
+
+            update(dt) {
+                this.player.update(dt, this.input, this.map);
+
+                const targetCamX = this.player.x - this.internalWidth / 2;
+                const targetCamY = this.player.y - this.internalHeight / 2;
+                
+                const maxCamX = this.map.worldWidth - this.internalWidth;
+                const maxCamY = this.map.worldHeight - this.internalHeight;
+
+                const clampedTargetX = Math.max(0, Math.min(targetCamX, maxCamX));
+                const clampedTargetY = Math.max(0, Math.min(targetCamY, maxCamY));
+
+                this.camera.x += (clampedTargetX - this.camera.x) * 0.1;
+                this.camera.y += (clampedTargetY - this.camera.y) * 0.1;
+
+                // Coleta de Itens
+                this.items.forEach(item => {
+                    if (item.active) {
+                        const dist = Math.hypot(this.player.x - item.x, this.player.y - item.y);
+                        if (dist < this.player.radius + item.radius) {
+                            item.active = false;
+                            if (item.type === 'paraffin') {
+                                this.player.paraffins++;
+                            } else if (item.type === 'hammer') {
+                                this.player.hasHammer = true;
+                            }
+                        }
+                    }
+                });
+
+                // Interação com a Passagem Bloqueada
+                const blk = this.map.blockade;
+                const msgEl = document.getElementById('interaction-msg');
+
+                if (blk.active) {
+                    const distToBlockade = Math.hypot(this.player.x - blk.x, this.player.y - (blk.y + blk.h / 2));
+                    
+                    if (distToBlockade < 80) {
+                        msgEl.style.display = 'block';
+                        if (this.player.hasHammer) {
+                            msgEl.innerText = "Pressione [ E ] ou [ ESPAÇO ] para destruir a madeira com o Martelo!";
+                            msgEl.style.borderColor = '#f3d874';
+                        } else {
+                            msgEl.innerText = `"Droga! Não consigo passar, estas tábuas estão muito bem pregadas..."`;
+                            msgEl.style.borderColor = '#ff5533';
+                        }
+
+                        if ((this.input.isJustPressed('e') || this.input.isJustPressed(' ')) && this.player.hasHammer) {
+                            blk.active = false;
+                            this.isFinished = true;
+                            document.getElementById('victory-screen').style.display = 'flex';
+                        }
+                    } else {
+                        msgEl.style.display = 'none';
+                    }
+                } else {
+                    msgEl.style.display = 'none';
+                }
+
+                // Atualizar HUD
+                document.getElementById('fuel-fill').style.width = `${this.player.fuel}%`;
+                document.getElementById('sanity-fill').style.width = `${this.player.sanity}%`;
+                document.getElementById('paraffin-count').innerText = this.player.paraffins;
+                
+                const hammerEl = document.getElementById('hammer-count');
+                if (this.player.hasHammer) {
+                    hammerEl.innerText = "POSSUI";
+                    hammerEl.style.color = "#55ff77";
+                } else {
+                    hammerEl.innerText = "NÃO POSSUI";
+                    hammerEl.style.color = "#ff5533";
+                }
+            }
+
+            draw() {
+                const ctx = this.ctx;
+                ctx.save();
+                ctx.translate(-Math.floor(this.camera.x), -Math.floor(this.camera.y));
+
+                ctx.fillStyle = '#080605';
+                ctx.fillRect(0, 0, this.map.worldWidth, this.map.worldHeight);
+
+                const halfW = this.map.worldWidth / 2;
+                const room2Rect = { x: 0, y: 0, w: halfW - 30, h: this.map.worldHeight };
+                const room1Rect = { x: halfW + 30, y: 0, w: halfW - 30, h: this.map.worldHeight };
+
+                this.drawFloor(room2Rect, PALETTE.room2Floor, PALETTE.room2Grid);
+                this.drawFloor(room1Rect, PALETTE.room1Floor, PALETTE.room1Grid);
+
+                this.drawBlockade();
+                this.items.forEach(item => { if (item.active) this.drawItem2D5(item); });
+                this.drawPlayer2D5();
+                this.drawWalls2D5();
+                
+                ctx.restore();
+
+                this.renderLighting();
+                ctx.drawImage(this.lightCanvas, 0, 0);
+            }
+
+            drawFloor(room, color, gridColor) {
+                const ctx = this.ctx;
+                ctx.fillStyle = color;
+                ctx.fillRect(room.x, room.y, room.w, room.h);
+
+                ctx.strokeStyle = gridColor;
+                ctx.lineWidth = 1;
+                const step = 45;
+                for (let x = room.x; x < room.x + room.w; x += step) {
+                    ctx.beginPath(); ctx.moveTo(x, room.y); ctx.lineTo(x, room.y + room.h); ctx.stroke();
+                }
+                for (let y = room.y; y < room.y + room.h; y += step) {
+                    ctx.beginPath(); ctx.moveTo(room.x, y); ctx.lineTo(room.x + room.w, y); ctx.stroke();
+                }
+            }
+
+            drawBlockade() {
+                const blk = this.map.blockade;
+                if (!blk.active) return;
+
+                const ctx = this.ctx;
+                ctx.save();
+
+                // 1. Vigas de suporte verticais de fundo (estrutura das laterais)
+                ctx.fillStyle = '#3a200a';
+                ctx.fillRect(blk.x - 4, blk.y, 8, blk.h);
+                ctx.fillRect(blk.x + blk.w - 4, blk.y, 8, blk.h);
+
+                // Configuração das tábuas horizontais
+                const planks = [
+                    { y: blk.y + 6,  h: 22, color: '#7c4e28', grain: '#563419', crack: true,  knot: false },
+                    { y: blk.y + 34, h: 24, color: '#663d1d', grain: '#44260f', crack: false, knot: true  },
+                    { y: blk.y + 64, h: 22, color: '#85542b', grain: '#5e391b', crack: false, knot: false },
+                    { y: blk.y + 92, h: 22, color: '#724520', grain: '#4b2b12', crack: true,  knot: true  }
+                ];
+
+                // 2. Desenhar as tábuas horizontais
+                planks.forEach((p, idx) => {
+                    const x = blk.x - 6;
+                    const w = blk.w + 12;
+
+                    // Sombra própria projetada abaixo de cada tábua
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                    ctx.fillRect(x + 2, p.y + p.h, w - 2, 4);
+
+                    // Corpo da tábua
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(x, p.y, w, p.h);
+
+                    // Chanfrado/Bisel (Luz no topo, sombra embaixo para dar volume 3D)
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.fillRect(x, p.y, w, 2); 
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                    ctx.fillRect(x, p.y + p.h - 2, w, 2); 
+
+                    // Vetos / Fibras da madeira (Linhas finas)
+                    ctx.strokeStyle = p.grain;
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x + 4, p.y + p.h * 0.3);
+                    ctx.lineTo(x + w - 6, p.y + p.h * 0.35);
+                    ctx.moveTo(x + 8, p.y + p.h * 0.7);
+                    ctx.lineTo(x + w - 4, p.y + p.h * 0.65);
+                    ctx.stroke();
+
+                    // Nó de madeira (se houver)
+                    if (p.knot) {
+                        const kx = x + (idx % 2 === 0 ? w * 0.35 : w * 0.68);
+                        const ky = p.y + p.h / 2;
+                        ctx.fillStyle = p.grain;
+                        ctx.beginPath();
+                        ctx.ellipse(kx, ky, 5, 3, 0.1, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    // Rachadura de madeira velha (se houver)
+                    if (p.crack) {
+                        ctx.strokeStyle = '#231206';
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(x + w - 12, p.y + 2);
+                        ctx.lineTo(x + w - 24, p.y + p.h * 0.55);
+                        ctx.stroke();
+                    }
+
+                    // Pregos de ferro nas extremidades
+                    const nailY = p.y + p.h / 2;
+                    [x + 5, x + w - 5].forEach(nx => {
+                        ctx.fillStyle = '#1c1c1c';
+                        ctx.beginPath();
+                        ctx.arc(nx, nailY, 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#777';
+                        ctx.fillRect(nx - 1, nailY - 1, 1, 1); // Ponto de brilho no prego
+                    });
+                });
+
+                // 3. Tábua Diagonal de Reforço com Sombra Projetada
+                ctx.save();
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                ctx.shadowBlur = 5;
+                ctx.shadowOffsetY = 4;
+
+                // Borda escura da viga diagonal
+                ctx.strokeStyle = '#47280f';
+                ctx.lineWidth = 15;
+                ctx.beginPath();
+                ctx.moveTo(blk.x - 3, blk.y + 4);
+                ctx.lineTo(blk.x + blk.w + 3, blk.y + blk.h - 4);
+                ctx.stroke();
+
+                // Centro da viga diagonal
+                ctx.strokeStyle = '#794721';
+                ctx.lineWidth = 11;
+                ctx.beginPath();
+                ctx.moveTo(blk.x - 3, blk.y + 4);
+                ctx.lineTo(blk.x + blk.w + 3, blk.y + blk.h - 4);
+                ctx.stroke();
+                ctx.restore();
+
+                // Parafusos/Parafusos reforçados da viga diagonal
+                const bolts = [
+                    { x: blk.x + 6, y: blk.y + 14 },
+                    { x: blk.x + blk.w / 2, y: blk.y + blk.h / 2 },
+                    { x: blk.x + blk.w - 6, y: blk.y + blk.h - 14 }
+                ];
+
+                bolts.forEach(b => {
+                    ctx.fillStyle = '#111';
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#888';
+                    ctx.fillRect(b.x - 1, b.y - 1, 1.5, 1.5);
+                });
+
+                ctx.restore();
+            }
+
+            drawWalls2D5() {
+                const ctx = this.ctx;
+                const m = this.map;
+                const h = m.wallHeight;
+
+                const renderSingleWall = (w) => {
+                    ctx.fillStyle = PALETTE.wallFront;
+                    ctx.fillRect(w.x, w.y + w.h - h, w.w, h);
+                    ctx.fillStyle = PALETTE.wallTop;
+                    ctx.fillRect(w.x, w.y, w.w, w.h - h);
+                    ctx.strokeStyle = '#1d130c';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(w.x, w.y, w.w, w.h);
+                };
+
+                // --- PAREDE CENTRAL ---
+                const wallX = m.worldWidth / 2 - 30;
+                const wallW = 60;
+                const holeY = m.worldHeight / 2 - 45;
+                const holeH = 90;
+
+                renderSingleWall({ x: wallX, y: 0, w: wallW, h: holeY });
+                renderSingleWall({ x: wallX, y: holeY + holeH, w: wallW, h: m.worldHeight - (holeY + holeH) });
+
+                ctx.fillStyle = PALETTE.holeInner;
+                ctx.fillRect(wallX, holeY, wallW, holeH);
+                ctx.strokeStyle = PALETTE.holeRim;
+                ctx.lineWidth = 4;
+                ctx.strokeRect(wallX, holeY, wallW, holeH);
+
+                // --- PAREDE DA DIREITA (NOVA) ---
+                const rw = m.rightWall;
+                renderSingleWall({ x: rw.x, y: 0, w: rw.w, h: rw.holeY });
+                renderSingleWall({ x: rw.x, y: rw.holeY + rw.holeH, w: rw.w, h: m.worldHeight - (rw.holeY + rw.holeH) });
+
+                ctx.fillStyle = PALETTE.holeInner;
+                ctx.fillRect(rw.x, rw.holeY, rw.w, rw.holeH);
+                ctx.strokeStyle = PALETTE.holeRim;
+                ctx.lineWidth = 4;
+                ctx.strokeRect(rw.x, rw.holeY, rw.w, rw.holeH);
+            }
+
+            drawPlayer2D5() {
+                const ctx = this.ctx;
+                const p = this.player;
+                const h = p.height2D;
+
+                ctx.fillStyle = PALETTE.playerShadow;
+                ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, p.radius * 1.1, p.radius * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+
+                const topY = p.y - h;
+                ctx.fillStyle = PALETTE.playerBody;
+                ctx.beginPath(); ctx.rect(p.x - p.radius * 0.7, topY, p.radius * 1.4, h); ctx.fill();
+
+                ctx.fillStyle = PALETTE.playerHead;
+                ctx.beginPath(); ctx.arc(p.x, topY, p.radius * 0.8, 0, Math.PI * 2); ctx.fill();
+
+                ctx.strokeStyle = '#fcdc53'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(p.x, topY); ctx.lineTo(p.x + Math.cos(p.angle) * (p.radius + 6), topY + Math.sin(p.angle) * (p.radius + 6)); ctx.stroke();
+            }
+
+            drawItem2D5(item) {
+                const ctx = this.ctx;
+
+                if (item.type === 'paraffin') {
+                    const glow = ctx.createRadialGradient(item.x, item.y, 2, item.x, item.y, 16);
+                    glow.addColorStop(0, 'rgba(252, 220, 83, 0.6)'); glow.addColorStop(1, 'rgba(252, 220, 83, 0)');
+                    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(item.x, item.y, 16, 0, Math.PI * 2); ctx.fill();
+
+                    ctx.fillStyle = PALETTE.paraffin; ctx.fillRect(item.x - 6, item.y - 10, 12, 10);
+                    ctx.fillStyle = '#b89c30'; ctx.fillRect(item.x - 6, item.y - 2, 12, 3);
+                } else if (item.type === 'hammer') {
+                    const glow = ctx.createRadialGradient(item.x, item.y, 2, item.x, item.y, 18);
+                    glow.addColorStop(0, 'rgba(255, 120, 50, 0.7)'); glow.addColorStop(1, 'rgba(255, 120, 50, 0)');
+                    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(item.x, item.y, 18, 0, Math.PI * 2); ctx.fill();
+
+                    // Cabo de madeira
+                    ctx.save();
+                    ctx.translate(item.x, item.y);
+                    ctx.rotate(-Math.PI / 4);
+                    ctx.fillStyle = '#8b5a2b';
+                    ctx.fillRect(-3, -12, 6, 20);
+                    
+                    // Cabeça de ferro do martelo
+                    ctx.fillStyle = '#aaa';
+                    ctx.fillRect(-8, -14, 16, 7);
+                    ctx.restore();
+                }
+            }
+
+            renderLighting() {
+                const lCtx = this.lightCtx;
+                const p = this.player;
+
+                lCtx.clearRect(0, 0, this.internalWidth, this.internalHeight);
+
+                lCtx.globalCompositeOperation = 'source-over';
+                
+                const sanityFactor = p.sanity / 100;
+                const baseDarknessAlpha = 0.95 - (sanityFactor * 0.40);
+                
+                lCtx.fillStyle = `rgba(0, 0, 0, ${baseDarknessAlpha})`;
+                lCtx.fillRect(0, 0, this.internalWidth, this.internalHeight);
+
+                const fuelFactor = p.fuel / 100;
+                
+                const ambientRadius = 80; 
+                const coneRadius = 150 + (180 * fuelFactor);
+                const coneAngle = Math.PI / 2.2; 
+
+                const lx = p.x - this.camera.x;
+                const ly = (p.y - p.height2D * 0.8) - this.camera.y;
+
+                lCtx.globalCompositeOperation = 'destination-out';
+
+                let ambGrad = lCtx.createRadialGradient(lx, ly, 0, lx, ly, ambientRadius);
+                ambGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+                ambGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.7)');
+                ambGrad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+                
+                lCtx.fillStyle = ambGrad;
+                lCtx.beginPath(); lCtx.arc(lx, ly, ambientRadius, 0, Math.PI * 2); lCtx.fill();
+
+                if (p.fuel > 0) {
+                    let coneGrad = lCtx.createRadialGradient(lx, ly, 0, lx, ly, coneRadius);
+                    coneGrad.addColorStop(0, `rgba(0, 0, 0, ${0.95 * fuelFactor})`);
+                    coneGrad.addColorStop(0.7, `rgba(0, 0, 0, ${0.5 * fuelFactor})`);
+                    coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    
+                    lCtx.fillStyle = coneGrad;
+                    lCtx.beginPath(); lCtx.moveTo(lx, ly); lCtx.arc(lx, ly, coneRadius, p.angle - coneAngle/2, p.angle + coneAngle/2); lCtx.closePath(); lCtx.fill();
+                }
+
+                lCtx.globalCompositeOperation = 'source-over';
+                lCtx.fillStyle = '#080605';
+                
+                const wallScreenX = (this.map.worldWidth / 2 - 30) - this.camera.x;
+                const wallScreenWidth = 60;
+
+                if (p.currentZone === 1) {
+                    lCtx.fillRect(0, 0, wallScreenX, this.internalHeight);
+                } else if (p.currentZone === 2) {
+                    lCtx.fillRect(wallScreenX + wallScreenWidth, 0, this.internalWidth - (wallScreenX + wallScreenWidth), this.internalHeight);
+                }
+            }
+        }
+
+        window.onload = () => new GameEngine();
+    </script>
+</body>
+</html>
